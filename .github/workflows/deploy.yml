@@ -1,0 +1,59 @@
+name: Scan and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Default: read-only access to the repo for every job
+permissions:
+  contents: read
+
+jobs:
+  security-scan:
+    name: Security checkpoint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code (full history for secret scanning)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks - scan for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkov - scan Terraform for misconfigurations
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          framework: terraform
+          soft_fail: true
+
+  deploy:
+    name: Deploy site
+    needs: security-scan
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Log in to AWS with OIDC (no stored keys)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Upload site to S3
+        run: aws s3 sync site/ "s3://${{ vars.SITE_BUCKET }}" --delete
+
+      - name: Refresh CloudFront
+        run: aws cloudfront create-invalidation --distribution-id "${{ vars.CF_DISTRIBUTION_ID }}" --paths "/*"
