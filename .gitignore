@@ -38,3 +38,6 @@ Thumbs.db
 
 # --- Per-environment settings hold no secrets; the pipeline needs them ---
 !terraform/site/env/*.tfvars
+
+# --- Identity domain map holds no secrets; it records which names each pipeline may manage ---
+!terraform/identity/domains.auto.tfvars

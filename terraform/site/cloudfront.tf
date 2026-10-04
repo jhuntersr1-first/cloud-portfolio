@@ -15,6 +15,7 @@ resource "aws_cloudfront_distribution" "site" {
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
   comment             = "cloud-portfolio ${var.environment} site"
+  aliases             = var.domain_names
 
   origin {
     origin_id                = "s3-site"
@@ -39,7 +40,9 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.site.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
 
@@ -71,7 +74,7 @@ resource "aws_s3_bucket_policy" "site" {
 }
 
 output "site_url" {
-  value = "https://${aws_cloudfront_distribution.site.domain_name}"
+  value = "https://${var.domain_names[0]}"
 }
 
 output "site_bucket_name" {

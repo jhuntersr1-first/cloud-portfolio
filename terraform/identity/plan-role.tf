@@ -57,6 +57,30 @@ data "aws_iam_policy_document" "plan" {
     actions   = ["cloudfront:Get*", "cloudfront:List*"]
     resources = ["*"]
   }
+
+  statement {
+    sid       = "ReadCertificates"
+    actions   = ["acm:DescribeCertificate", "acm:ListTagsForCertificate"]
+    resources = ["arn:aws:acm:us-east-1:*:certificate/*"]
+  }
+
+  statement {
+    sid       = "ListCertificates"
+    actions   = ["acm:ListCertificates"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ReadDnsZone"
+    actions   = ["route53:GetHostedZone", "route53:ListResourceRecordSets", "route53:ListTagsForResource"]
+    resources = [data.aws_route53_zone.site.arn]
+  }
+
+  statement {
+    sid       = "FindZones"
+    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName", "route53:GetChange"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "plan" {

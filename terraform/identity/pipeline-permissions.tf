@@ -63,6 +63,72 @@ data "aws_iam_policy_document" "pipeline" {
     resources = ["*"]
   }
 
+  # Certificates: may only REQUEST ID cards for this environment's own names
+  statement {
+    sid       = "RequestOwnCertificates"
+    actions   = ["acm:RequestCertificate"]
+    resources = ["*"]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "acm:DomainNames"
+      values   = var.env_domains[each.key]
+    }
+
+    # ForAllValues is true when the key is missing, so also require it to be present
+    condition {
+      test     = "Null"
+      variable = "acm:DomainNames"
+      values   = ["false"]
+    }
+  }
+
+  # Certificates: manage existing ones in us-east-1 (ACM can't scope these by name;
+  # AWS refuses to delete a certificate CloudFront is still using)
+  statement {
+    sid = "ManageCertificates"
+    actions = [
+      "acm:DescribeCertificate",
+      "acm:DeleteCertificate",
+      "acm:AddTagsToCertificate",
+      "acm:RemoveTagsFromCertificate",
+      "acm:ListTagsForCertificate",
+    ]
+    resources = ["arn:aws:acm:us-east-1:*:certificate/*"]
+  }
+
+  statement {
+    sid       = "ListCertificates"
+    actions   = ["acm:ListCertificates"]
+    resources = ["*"]
+  }
+
+  # DNS: read the domain's phone book
+  statement {
+    sid       = "ReadDnsZone"
+    actions   = ["route53:GetHostedZone", "route53:ListResourceRecordSets", "route53:ListTagsForResource"]
+    resources = [data.aws_route53_zone.site.arn]
+  }
+
+  statement {
+    sid       = "FindZonesAndChanges"
+    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName", "route53:GetChange"]
+    resources = ["*"]
+  }
+
+  # DNS: change ONLY this environment's names and their certificate-proof records (_xyz.name)
+  statement {
+    sid       = "ChangeOwnDnsRecords"
+    actions   = ["route53:ChangeResourceRecordSets"]
+    resources = [data.aws_route53_zone.site.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "route53:ChangeResourceRecordSetsNormalizedRecordNames"
+      values   = flatten([for name in var.env_domains[each.key] : [name, "_*.${name}"]])
+    }
+  }
+
   # Backstops: explicit denies win over any allow, anywhere
   statement {
     sid       = "DenyIdentityChanges"
