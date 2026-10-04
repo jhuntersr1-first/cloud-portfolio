@@ -24,6 +24,7 @@
     .card p { font-size: 14px; color: #94a3b8; }
     .project { background: #111c33; border: 1px solid #1e293b; border-left: 3px solid #38bdf8;
                border-radius: 10px; padding: 24px; }
+    .project + .project { margin-top: 16px; }
     .project h3 { color: #f8fafc; font-size: 18px; margin-bottom: 8px; }
     .project p { font-size: 15px; margin-bottom: 12px; }
     .meta { font-size: 13px; color: #38bdf8; letter-spacing: 0.5px; }
@@ -60,6 +61,18 @@
 
     <section>
       <h2>Projects</h2>
+      <div class="project">
+        <h3>Cloud Portfolio Platform (this site)</h3>
+        <p>The site you're reading, built as a production-style platform: dev, test, and prod
+        environments on S3 and CloudFront, each with its own domain, ACM certificate, and a
+        TLS 1.2 minimum. Pull requests get read-only Terraform plans; merges promote
+        dev &rarr; test automatically, and prod waits for manual approval.</p>
+        <p>Security is built in: short-lived GitHub OIDC roles per environment, scoped to their
+        own buckets and domain names with no IAM permissions, plus Gitleaks, Checkov, Trivy
+        (pinned by commit SHA), and an ephemeral SonarQube server on every change.</p>
+        <div class="meta">Terraform &middot; GitHub Actions &middot; OIDC &middot; CloudFront &middot; ACM &middot; Route 53
+        &middot; <a href="https://github.com/jhuntersr1-first/cloud-portfolio">View the code &rarr;</a></div>
+      </div>
       <div class="project">
         <h3>AI-Powered SOAR Agent</h3>
         <p>Security orchestration agent built on Amazon Bedrock that analyzes AWS WAF
