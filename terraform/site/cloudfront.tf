@@ -1,11 +1,4 @@
-# Look up AWS's ready-made policies by name (no hard-coded IDs)
-data "aws_cloudfront_cache_policy" "optimized" {
-  name = "Managed-CachingOptimized"
-}
 
-data "aws_cloudfront_response_headers_policy" "security" {
-  name = "Managed-SecurityHeadersPolicy"
-}
 
 # CloudFront's ID badge for entering the private S3 bucket
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -35,8 +28,8 @@ resource "aws_cloudfront_distribution" "site" {
     allowed_methods            = ["GET", "HEAD"]
     cached_methods             = ["GET", "HEAD"]
     compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.optimized.id
-    response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security.id
+    cache_policy_id            = aws_cloudfront_cache_policy.static.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
   }
 
   restrictions {
