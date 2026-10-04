@@ -1,7 +1,11 @@
 # The storage room for the website files (private; only CloudFront may read it)
 resource "aws_s3_bucket" "site" {
-  bucket_prefix = "cloud-portfolio-site-"
+  bucket_prefix = "cloud-portfolio-${var.environment}-site-"
   force_destroy = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Keep old versions of the page, so a bad deploy can be rolled back
