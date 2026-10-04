@@ -10,96 +10,89 @@
 
 ## Overview
 
-A production-style personal portfolio site for Jerome Hunter, Senior DevSecOps Cloud Engineer. The site itself is the project: a static HTML page served from AWS S3 and CloudFront, built and deployed through a security-gated GitHub Actions pipeline across three isolated environments. Every engineering decision—OIDC trust, scanner pinning, CSP headers, least-privilege roles—is deliberate and documented in the commit history.
+A production-style personal portfolio site for Jerome Hunter, Senior DevSecOps Cloud Engineer. The project is notable not just as a portfolio page but as a demonstration of the platform itself: three isolated environments, a gated promotion pipeline, short-lived OIDC credentials, and four layers of security scanning on every change. The static site is served from S3 and CloudFront; all infrastructure is defined in Terraform and deployed exclusively through GitHub Actions.
 
 ## Architecture
 
-The infrastructure is split into three Terraform stacks:
+The project is split into three Terraform stacks.
 
-- **Bootstrap** — an encrypted, versioned S3 bucket that holds remote Terraform state.
-- **Identity** — a shared stack that provisions the GitHub OIDC provider, per-environment deploy roles, a read-only PR plan role, and the IAM permissions each role needs (ACM, Route 53, scoped to its own environment's resource names). No role carries IAM permissions.
-- **Site** — an environment-aware stack that provisions an S3 origin bucket, a CloudFront distribution with Origin Access Control (OAC), a custom static cache policy, a response-headers policy with a strict Content Security Policy, an ACM certificate with DNS validation, and Route 53 alias records.
+**Bootstrap** provisions the encrypted, versioned S3 bucket used to store remote Terraform state. It runs once and is not touched by the pipeline.
 
-Each environment has its own S3 backend configuration, its own Terraform variable file, and its own named resources.
+**Identity** manages GitHub OIDC trust and all IAM roles. It is intentionally separate from the site stack so that credential configuration is never mixed with resource configuration. The stack provisions one deploy role per environment and one read-only plan role used by pull requests. Deploy roles carry no IAM permissions and include explicit denies; they are scoped to their own environment's S3 bucket and Route 53 hosted zone. The OIDC trust condition matches GitHub's immutable owner and repository ID fields in the `sub` claim, which also protects against repository-hijacking attacks.
+
+**Site** is environment-aware and uses partial backend configuration to select the correct state file. It provisions an S3 origin bucket, a CloudFront distribution with an Origin Access Control, a custom static cache policy, a response-headers policy with a strict Content Security Policy that also strips origin-identifying headers, an ACM certificate with DNS validation, and Route 53 alias records. TLS 1.2 is the minimum protocol version. Resources are named per environment, and the production bucket uses a create-before-destroy lifecycle rule for zero-downtime cutover.
 
 ## CI/CD Pipeline
 
-The pipeline is defined in `.github/workflows/deploy.yml` and a reusable `apply-env.yml` workflow.
+The pipeline has two workflows. The main workflow runs on every push to `main`, every pull request targeting `main`, and on manual dispatch.
 
-**On every push and pull request:**
+**Security checkpoint** runs first on all triggers. It executes Gitleaks with full commit history to detect leaked secrets, Checkov against the Terraform directory for infrastructure misconfigurations, Trivy for vulnerable packages, secrets, and misconfigurations (pinned to a full commit SHA because version tags for this action were hijacked in a March 2026 supply-chain attack), and an ephemeral SonarQube scan. The SonarQube job spins up a throwaway Community server as a service container pinned by image digest, waits for readiness, immediately replaces the default admin password with a randomly generated one, creates a one-time analysis token, runs the scanner, and then prints the quality gate status, issues, and security hotspots before the container is discarded.
 
-1. **Security checkpoint** (runs first, blocks everything downstream):
-   - **Gitleaks** scans the full commit history for leaked secrets.
-   - **Checkov** scans all Terraform for misconfigurations (`soft_fail` so findings are visible without blocking).
-   - **Trivy** scans for vulnerabilities, secrets, and misconfigurations at HIGH and CRITICAL severity. Pinned to a full commit SHA because version tags for this action were hijacked in a March 2026 supply-chain attack.
-   - **SonarQube** runs as an ephemeral service container pinned by image digest. The pipeline waits for the server to reach `UP`, immediately rotates the default admin password to a random value, creates a one-time analysis token, runs the scanner (also pinned by digest), then prints the quality gate status, issues, and security hotspots.
+**Pull requests** trigger a parallel read-only `terraform plan` across all three environments using the scoped plan role. The plan role cannot acquire a state lock, which prevents any accidental mutation.
 
-**On pull requests** (after the security checkpoint passes):
-
-- A matrix plan job runs `terraform plan` for all three environments simultaneously using the read-only plan role. The plan role cannot acquire a state lock.
-
-**On merges to main:**
-
-- `dev` deploys automatically.
-- `test` deploys after `dev` succeeds.
-- `prod` deploys after `test` succeeds and requires manual approval.
-
-All deploy jobs assume their environment's OIDC role. The default workflow permission is `contents: read`; `id-token: write` is granted only to jobs that need it.
+**Merges to main** run a sequential promotion: dev applies first, test applies after dev succeeds, and prod waits for manual approval before applying. Each environment authenticates to AWS using its own short-lived OIDC role; no long-lived credentials exist anywhere in the pipeline.
 
 ## Security Design
 
-| Control | Implementation |
-|---|---|
-| Short-lived credentials | GitHub OIDC; no long-lived access keys anywhere |
-| Repojacking protection | OIDC trust policy matches GitHub's immutable owner and repo ID fields in the `sub` claim |
-| Least privilege | Per-environment roles scoped to their own S3 buckets and domain names; no role has IAM permissions |
-| Read-only PR role | Separate plan role with explicit denies on mutating actions; cannot lock state |
-| Secret scanning | Gitleaks on full history at every run |
-| IaC scanning | Checkov on every run |
-| Dependency and filesystem scanning | Trivy pinned by commit SHA |
-| Static analysis | Ephemeral SonarQube pinned by image digest; admin password rotated before use; one-time token |
-| Origin protection | CloudFront OAC; S3 bucket not publicly accessible |
-| Transport security | TLS 1.2 minimum (`TLSv1.2_2021` policy) on all environments |
-| Response headers | Custom CloudFront headers policy with strict CSP; origin-identifying headers stripped |
-| State security | Remote state in an encrypted, versioned S3 bucket |
-| Supply-chain hygiene | Scanner actions pinned by SHA or digest after observed tag-hijack incident |
-
-The CSP allows `img-src 'self'` only, which is why certification badge images are self-hosted rather than loaded from Credly's CDN.
+- GitHub OIDC with immutable owner/repo ID matching in the trust policy; no static AWS credentials
+- Per-environment deploy roles with no IAM permissions and explicit denies, scoped to named resources
+- Separate read-only plan role that cannot lock or modify state
+- Gitleaks on full commit history at every trigger
+- Checkov for Terraform misconfiguration scanning
+- Trivy pinned by commit SHA following a documented tag-hijacking incident
+- Ephemeral SonarQube server with immediate password rotation and a one-time token; server is destroyed after each run
+- S3 bucket accessible only through CloudFront via Origin Access Control; no public bucket policy
+- Strict Content Security Policy delivered via CloudFront response-headers policy; `img-src` is limited to `'self'`, which is why certification badge images are self-hosted rather than loaded from Credly
+- TLS 1.2 minimum on all CloudFront distributions
+- S3 lifecycle rules on all buckets (satisfies Checkov rule CKV2_AWS_61)
+- Terraform state encrypted and versioned in a dedicated bootstrap bucket
 
 ## Environments and Domains
 
-| Environment | Domain(s) | Purpose |
-|---|---|---|
-| dev | `dev.jhuntersr.com` | Automatic deploy on every merge to main |
-| test | `test.jhuntersr.com` | Promotes automatically after dev succeeds |
-| prod | `jhuntersr.com`, `www.jhuntersr.com` | Promotes after test; requires manual approval |
+| Environment | Domain |
+|---|---|
+| dev | dev.jhuntersr.com |
+| test | test.jhuntersr.com |
+| prod | jhuntersr.com, www.jhuntersr.com |
 
-Each environment has its own ACM certificate with DNS validation and Route 53 A/AAAA alias records.
+Each environment has its own ACM certificate, DNS validation records, CloudFront distribution, S3 bucket, OIDC deploy role, and Terraform state file.
 
 ## Certifications
 
-- **AWS Certified Solutions Architect – Associate** (Amazon Web Services) — verified on Credly
-- **HashiCorp Certified: Terraform Associate (003)** (HashiCorp) — verified on Credly
+- AWS Certified Solutions Architect – Associate (Amazon Web Services), verified on Credly
+- HashiCorp Certified: Terraform Associate (003), verified on Credly
 
 ## Key Engineering Decisions
 
-**OIDC over access keys.** All pipeline credentials are short-lived tokens assumed via GitHub OIDC. The trust policy matches immutable owner and repository ID fields, not mutable names, to prevent repojacking from granting a new owner access to the role.
-
-**Three Terraform stacks.** Bootstrap, identity, and site are separated so that state infrastructure and IAM trust are never destroyed by a routine site change. The identity stack can be applied once and shared across all environment deploys.
-
-**Scanner pinning by SHA/digest.** After observing that `trivy-action` version tags were hijacked in March 2026, all third-party scanner steps are pinned to immutable references (commit SHAs for GitHub Actions, image digests for Docker images).
-
-**Ephemeral SonarQube.** Running SonarQube as a throwaway service container avoids maintaining a persistent server while still producing quality gate results and a hotspot report on every change. The default password is rotated immediately and a one-time token is used for the scan.
-
-**`create_before_destroy` for prod bucket cutover.** The prod S3 bucket uses a `create_before_destroy` lifecycle rule so that a rename or replacement does not cause downtime by deleting the origin before its replacement exists.
-
-**Self-hosted badge images.** The strict `img-src 'self'` CSP would block externally hosted badge images. Badge PNGs are committed to the repository and served from the same origin.
+- **Separate identity stack**: Decouples credential infrastructure from site resources, allows the OIDC provider to be imported or removed independently, and prevents accidental destruction of IAM roles during site changes.
+- **Trivy pinned by commit SHA**: Version tags for the action were hijacked in March 2026; pinning to a SHA is the only reliable supply-chain control for this dependency.
+- **Ephemeral SonarQube**: Avoids maintaining a persistent server or paying for a hosted tier. The server exists only for the duration of the scan job.
+- **Self-hosted badge images**: The strict `img-src 'self'` CSP blocks external image sources, including Credly's embed script, so badge images are checked into the repository.
+- **Immutable ID OIDC trust**: Matching GitHub's owner and repository numeric IDs rather than names prevents a renamed or re-created repository from inheriting the trust relationship.
+- **create-before-destroy on the production bucket**: Allows the bucket to be renamed or replaced without a destroy-first outage window.
 
 ## Timeline
 
-| Date | Milestone |
-|---|---|
-| 2026-10-01 | Initial portfolio page; moved into `site/` directory; `.gitignore` for state and secrets |
-| 2026-10-02 | Terraform bootstrap (encrypted state bucket); S3 + CloudFront infrastructure with OAC and security headers |
-| 2026-10-03 | GitHub OIDC trust and deploy role; CI/CD pipeline with Gitleaks, Checkov, and OIDC deploy (PR #1); OIDC trust hardened to immutable IDs (PR #2); Checkov hardening with lifecycle rules and custom CloudFront policies (PR #4); identity split into its own stack; dev/test/prod promotion pipeline with per-environment roles and read-only plan role (PR #5); old shared deploy role retired (PR #6) |
-| 2026-10-04 | Trivy scan added, pinned by commit SHA (PR #7); ephemeral SonarQube scan added (PR #8); custom domains with ACM, DNS validation, and Route 53 aliases for all three environments (PR #9); Cloud Portfolio Platform project card added (PR #10); AWS SAA and Terraform Associate Credly badges added as self-hosted images (PR #11); Contact section linked directly to this repository (PR #12) |
+All work was completed over four days, from initial commit on 2026-10-01 through the final merged pull request on 2026-10-04, across 13 pull requests.
+
+## About this README
+
+This write-up is generated by a private AI reporting agent running on Amazon Bedrock
+(Anthropic Claude), then reviewed by a human before it is merged. The agent's source
+code is kept private.
+
+**Security controls**
+
+- **Data minimization and redaction:** account IDs, ARNs, access key IDs, and email
+  addresses are removed before any data leaves the machine.
+- **Prompt-injection mitigations,** following the OWASP Top 10 for LLM Applications
+  (LLM01: Prompt Injection): repository content is passed to the model as clearly
+  delimited, untrusted data; input is screened for common injection patterns; and the
+  model has no tools or permissions, so it can only return text.
+- **Output validation:** the agent refuses to save output containing sensitive patterns,
+  images, embedded HTML, or links outside an approved list.
+- **Human review:** every version goes through a pull request and this repository's
+  security scanners before publication.
+
+As with any LLM application, prompt-injection risk can be reduced but not eliminated;
+these layered controls and human review are the safeguards.
