@@ -25,6 +25,9 @@
     .project { background: #111c33; border: 1px solid #1e293b; border-left: 3px solid #38bdf8;
                border-radius: 10px; padding: 24px; }
     .project + .project { margin-top: 16px; }
+    .badge { display: flex; align-items: center; gap: 16px; text-decoration: none; }
+    .badge img { flex-shrink: 0; }
+    .badge:hover { border-color: #38bdf8; text-decoration: none; }
     .project h3 { color: #f8fafc; font-size: 18px; margin-bottom: 8px; }
     .project p { font-size: 15px; margin-bottom: 12px; }
     .meta { font-size: 13px; color: #38bdf8; letter-spacing: 0.5px; }
@@ -85,8 +88,14 @@
     <section>
       <h2>Certifications</h2>
       <div class="cards">
-        <div class="card"><h3>AWS Solutions Architect – Associate</h3><p>Amazon Web Services</p></div>
-        <div class="card"><h3>Terraform Associate</h3><p>HashiCorp</p></div>
+        <a class="card badge" href="https://www.credly.com/badges/79a75b91-8208-4de2-a1db-731315e9e428/public_url" target="_blank" rel="noopener noreferrer">
+          <img src="badges/aws-saa.png" alt="AWS Certified Solutions Architect &ndash; Associate badge" width="88" height="88">
+          <div><h3>AWS Solutions Architect &ndash; Associate</h3><p>Amazon Web Services &middot; Verify on Credly &rarr;</p></div>
+        </a>
+        <a class="card badge" href="https://www.credly.com/badges/84f834d8-0139-46f2-a4b0-dc6b287dbe29/public_url" target="_blank" rel="noopener noreferrer">
+          <img src="badges/terraform-associate.png" alt="HashiCorp Certified: Terraform Associate (003) badge" width="88" height="88">
+          <div><h3>Terraform Associate (003)</h3><p>HashiCorp &middot; Verify on Credly &rarr;</p></div>
+        </a>
       </div>
     </section>
 
