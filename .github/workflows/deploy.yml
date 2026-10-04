@@ -43,6 +43,48 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "0"
 
+  # Ephemeral SonarQube: a throwaway server that exists only during this job
+  sonarqube:
+    name: SonarQube scan
+    runs-on: ubuntu-latest
+    services:
+      sonarqube:
+        # sonarqube:community, pinned by digest (tags can be moved; digests can't)
+        image: sonarqube@sha256:c0f1160bccfa435db4168c2d7df69af3c3ea7bfeb87395613014048fb33a68c1
+        env:
+          SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+        ports:
+          - 9000:9000
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Wait for SonarQube to start
+        run: |
+          for i in $(seq 1 60); do
+            status=$(curl -s http://localhost:9000/api/system/status | jq -r '.status' 2>/dev/null)
+            echo "Check $i: ${status:-not answering yet}"
+            if [ "$status" = "UP" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "SonarQube did not start within 5 minutes"
+          exit 1
+
+      - name: Replace default admin password and create a one-time token
+        run: |
+          default_pw="admin"  # public factory default, replaced immediately below
+          new_pw="Ci-$(openssl rand -hex 16)-Aa1!"
+          echo "::add-mask::$new_pw"
+          curl -sf -u "admin:$default_pw" -X POST "http://localhost:9000/api/users/change_password" \
+            --data-urlencode "login=admin" --data-urlencode "previousPassword=admin" --data-urlencode "password=$new_pw"
+          token=$(curl -sf -u "admin:$new_pw" -X POST "http://localhost:9000/api/user_tokens/generate" -d "name=ci" | jq -r '.token')
+          if [ -z "$token" ] || [ "$token" = "null" ]; then echo "Token creation failed"; exit 1; fi
+          echo "::add-mask::$token"
+          echo "SONAR_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "Token created (length ${#token})"
+
   # Pull requests only: preview changes in all 3 environments, read-only
   plan:
     name: Plan ${{ matrix.environment }}
