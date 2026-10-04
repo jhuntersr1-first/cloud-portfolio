@@ -1,5 +1,9 @@
 locals {
+  # GitHub's ID card includes immutable owner/repo IDs (protects against repojacking)
   github_repo = "jhuntersr1-first@246341035/cloud-portfolio@1400928325"
+
+  prod_bucket_arn       = "arn:aws:s3:::${var.prod_site_bucket_name}"
+  prod_distribution_arn = "arn:aws:cloudfront::${var.account_id}:distribution/${var.prod_distribution_id}"
 }
 
 # Tell AWS to trust GitHub as an ID card issuer
@@ -40,24 +44,24 @@ resource "aws_iam_role" "github_deploy" {
   max_session_duration = 3600
 }
 
-# What the role may do: ship content to THIS bucket and refresh THIS distribution
+# What the role may do: ship content to the prod bucket and refresh the prod distribution
 data "aws_iam_policy_document" "deploy" {
   statement {
     sid       = "ListSiteBucket"
     actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.site.arn]
+    resources = [local.prod_bucket_arn]
   }
 
   statement {
     sid       = "WriteSiteObjects"
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.site.arn}/*"]
+    resources = ["${local.prod_bucket_arn}/*"]
   }
 
   statement {
     sid       = "RefreshCloudFront"
     actions   = ["cloudfront:CreateInvalidation"]
-    resources = [aws_cloudfront_distribution.site.arn]
+    resources = [local.prod_distribution_arn]
   }
 }
 
