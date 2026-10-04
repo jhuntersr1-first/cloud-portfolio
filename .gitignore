@@ -35,3 +35,6 @@ Thumbs.db
 
 # --- Terraform lock file (not committed by choice) ---
 .terraform.lock.hcl
+
+# --- Per-environment settings hold no secrets; the pipeline needs them ---
+!terraform/site/env/*.tfvars
