@@ -85,6 +85,32 @@ jobs:
           echo "SONAR_TOKEN=$token" >> "$GITHUB_ENV"
           echo "Token created (length ${#token})"
 
+      - name: Run the Sonar scanner
+        # Report-only for now: a failed quality gate is shown but doesn't block the pipeline
+        continue-on-error: true
+        run: |
+          docker run --rm --network host \
+            -e SONAR_HOST_URL="http://localhost:9000" \
+            -e SONAR_TOKEN \
+            -v "$GITHUB_WORKSPACE:/usr/src" \
+            sonarsource/sonar-scanner-cli@sha256:a3f4215076706c95a17a68c19322ee916e40a3acd081a8c1a1e839e0194afa57 \
+            -Dsonar.projectKey=cloud-portfolio \
+            -Dsonar.working.directory=/tmp/scannerwork \
+            -Dsonar.qualitygate.wait=true
+
+      - name: Show quality gate and findings
+        run: |
+          api="http://localhost:9000/api"
+          auth=(-u "$SONAR_TOKEN:")  # token login, stored once and reused by each request below
+          echo "=== Quality gate ==="
+          curl -sf "${auth[@]}" "$api/qualitygates/project_status?projectKey=cloud-portfolio" | jq -r '.projectStatus.status'
+          echo "=== Issues ==="
+          curl -sf "${auth[@]}" "$api/issues/search?componentKeys=cloud-portfolio&ps=100" \
+            | jq -r '"Total: \(.total)", (.issues[] | "\(.severity)  \(.component | sub("cloud-portfolio:"; ""))  line \(.line // "-")  \(.message)")'
+          echo "=== Security hotspots ==="
+          curl -sf "${auth[@]}" "$api/hotspots/search?projectKey=cloud-portfolio&ps=100" \
+            | jq -r '"Total: \(.paging.total)", (.hotspots[] | "\(.vulnerabilityProbability)  \(.component | sub("cloud-portfolio:"; ""))  line \(.line // "-")  \(.message)")'
+
   # Pull requests only: preview changes in all 3 environments, read-only
   plan:
     name: Plan ${{ matrix.environment }}
