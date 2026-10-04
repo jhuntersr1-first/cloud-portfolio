@@ -1,7 +1,7 @@
 # Response headers policy: security headers, a strict CSP, browser caching,
 # and removal of headers that reveal how the site is built
 resource "aws_cloudfront_response_headers_policy" "site" {
-  name    = "cloud-portfolio-headers"
+  name    = "cloud-portfolio-${var.environment}-headers"
   comment = "Security headers + CSP + strip origin fingerprints"
 
   security_headers_config {

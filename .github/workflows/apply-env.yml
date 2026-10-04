@@ -1,0 +1,58 @@
+name: Apply one environment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "dev, test, or prod"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply:
+    name: Apply ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # Joins the GitHub Environment: unlocks ITS secret, and prod waits for approval
+    environment: ${{ inputs.environment }}
+    # Never let two runs edit the same environment at once
+    concurrency:
+      group: terraform-${{ inputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: terraform/site
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Install Terraform (same version as local)
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Log in to AWS with OIDC (this environment's role only)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Terraform init (this environment's logbook)
+        run: terraform init -input=false -backend-config=env/${{ inputs.environment }}.s3.tfbackend
+
+      - name: Terraform apply
+        run: terraform apply -input=false -auto-approve -var-file=env/${{ inputs.environment }}.tfvars
+
+      - name: Upload site to S3
+        run: aws s3 sync ../../site/ "s3://$(terraform output -raw site_bucket_name)" --delete
+
+      - name: Refresh CloudFront
+        run: aws cloudfront create-invalidation --distribution-id "$(terraform output -raw distribution_id)" --paths "/*"
+
+      - name: Show the address
+        run: echo "${{ inputs.environment }} is live at $(terraform output -raw site_url)"

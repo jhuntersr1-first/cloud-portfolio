@@ -1,6 +1,6 @@
 # Cache policy for a static site (adapted from LAB2's static cache policy)
 resource "aws_cloudfront_cache_policy" "static" {
-  name        = "cloud-portfolio-static"
+  name        = "cloud-portfolio-${var.environment}-static"
   comment     = "Static site: cache aggressively, keep the cache key minimal"
   default_ttl = 86400    # 1 day
   max_ttl     = 31536000 # 1 year

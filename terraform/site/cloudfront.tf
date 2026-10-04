@@ -2,7 +2,7 @@
 
 # CloudFront's ID badge for entering the private S3 bucket
 resource "aws_cloudfront_origin_access_control" "site" {
-  name                              = "cloud-portfolio-oac"
+  name                              = "cloud-portfolio-${var.environment}-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -14,7 +14,7 @@ resource "aws_cloudfront_distribution" "site" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
-  comment             = "cloud-portfolio site"
+  comment             = "cloud-portfolio ${var.environment} site"
 
   origin {
     origin_id                = "s3-site"

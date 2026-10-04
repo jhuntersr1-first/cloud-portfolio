@@ -8,9 +8,10 @@ terraform {
     }
   }
 
-  # Terraform's logbook lives in the encrypted, versioned vault
+  # Identity has its OWN logbook, separate from every site environment
   backend "s3" {
     bucket       = "cloud-portfolio-tfstate-bdd0b989"
+    key          = "identity/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true
     use_lockfile = true
@@ -22,10 +23,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "cloud-portfolio"
-      ManagedBy   = "terraform"
-      Component   = "site"
-      Environment = var.environment
+      Project   = "cloud-portfolio"
+      ManagedBy = "terraform"
+      Component = "identity"
     }
   }
 }

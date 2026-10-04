@@ -33,27 +33,73 @@ jobs:
           framework: terraform
           soft_fail: true
 
-  deploy:
-    name: Deploy site
+  # Pull requests only: preview changes in all 3 environments, read-only
+  plan:
+    name: Plan ${{ matrix.environment }}
     needs: security-scan
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, test, prod]
+    defaults:
+      run:
+        working-directory: terraform/site
     steps:
       - name: Check out code
         uses: actions/checkout@v5
 
-      - name: Log in to AWS with OIDC (no stored keys)
+      - name: Install Terraform (same version as local)
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Log in to AWS with OIDC (read-only plan role)
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
           aws-region: us-east-1
           mask-aws-account-id: true
 
-      - name: Upload site to S3
-        run: aws s3 sync site/ "s3://${{ vars.SITE_BUCKET }}" --delete
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=env/${{ matrix.environment }}.s3.tfbackend
 
-      - name: Refresh CloudFront
-        run: aws cloudfront create-invalidation --distribution-id "${{ vars.CF_DISTRIBUTION_ID }}" --paths "/*"
+      - name: Terraform plan (no lock - this role can only read)
+        run: terraform plan -input=false -lock=false -var-file=env/${{ matrix.environment }}.tfvars
+
+  # Merges to main: dev, then test, then prod (prod waits for your approval)
+  dev:
+    needs: security-scan
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/apply-env.yml
+    with:
+      environment: dev
+    secrets: inherit
+
+  test:
+    needs: dev
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/apply-env.yml
+    with:
+      environment: test
+    secrets: inherit
+
+  prod:
+    needs: test
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/apply-env.yml
+    with:
+      environment: prod
+    secrets: inherit
