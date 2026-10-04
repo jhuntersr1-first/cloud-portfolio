@@ -33,6 +33,16 @@ jobs:
           framework: terraform
           soft_fail: true
 
+      - name: Trivy - scan for vulnerable packages, secrets, and misconfigurations
+        # Pinned to a commit SHA (v0.36.0): version tags were hijacked in the March 2026 supply-chain attack
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
   # Pull requests only: preview changes in all 3 environments, read-only
   plan:
     name: Plan ${{ matrix.environment }}
