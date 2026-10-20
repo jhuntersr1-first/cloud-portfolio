@@ -54,7 +54,7 @@ data "aws_iam_policy_document" "plan" {
 
   statement {
     sid       = "ReadCloudFront"
-    actions   = ["cloudfront:Get*", "cloudfront:List*"]
+    actions   = ["cloudfront:Get*", "cloudfront:List*", "cloudfront:DescribeFunction"]
     resources = ["*"]
   }
 

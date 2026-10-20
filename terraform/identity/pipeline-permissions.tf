@@ -59,6 +59,11 @@ data "aws_iam_policy_document" "pipeline" {
       "cloudfront:UpdateResponseHeadersPolicy",
       "cloudfront:DeleteResponseHeadersPolicy",
       "cloudfront:CreateInvalidation",
+      "cloudfront:DescribeFunction",
+      "cloudfront:CreateFunction",
+      "cloudfront:UpdateFunction",
+      "cloudfront:PublishFunction",
+      "cloudfront:DeleteFunction",
     ]
     resources = ["*"]
   }
