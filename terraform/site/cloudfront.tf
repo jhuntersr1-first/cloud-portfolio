@@ -8,6 +8,27 @@ resource "aws_cloudfront_origin_access_control" "site" {
   signing_protocol                  = "sigv4"
 }
 
+# The doorman: only lets in visitors who came through our real address(es).
+# Anyone using the raw *.cloudfront.net side door gets a 403.
+resource "aws_cloudfront_function" "host_guard" {
+  name    = "cloud-portfolio-${var.environment}-host-guard"
+  runtime = "cloudfront-js-2.0"
+  comment = "Block requests not addressed to ${var.environment}'s custom domain"
+  publish = true
+
+  code = <<-EOT
+    function handler(event) {
+      var allowed = ${jsonencode(var.domain_names)};
+      var hostHeader = event.request.headers.host;
+      var host = hostHeader ? hostHeader.value.toLowerCase() : "";
+      if (allowed.indexOf(host) === -1) {
+        return { statusCode: 403, statusDescription: "Forbidden" };
+      }
+      return event.request;
+    }
+  EOT
+}
+
 # The front counter: serves the site worldwide over HTTPS
 resource "aws_cloudfront_distribution" "site" {
   enabled             = true
@@ -31,6 +52,12 @@ resource "aws_cloudfront_distribution" "site" {
     compress                   = true
     cache_policy_id            = aws_cloudfront_cache_policy.static.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
+
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.host_guard.arn
+    }
   }
 
   restrictions {
