@@ -3,6 +3,8 @@ locals {
 }
 
 data "aws_iam_policy_document" "pipeline" {
+  #checkov:skip=CKV_AWS_356:"*" only where AWS offers no resource ARN (CloudFront list/global actions, acm:RequestCertificate [domain-conditioned], acm:ListCertificates, route53:ListHostedZones*) and on explicit Deny statements
+  #checkov:skip=CKV_AWS_111:CloudFront writes need account-wide scope; compensating controls: no IAM, explicit identity denies, per-env OIDC roles, prod approval gate. Tag-based ABAC on backlog
   for_each = local.environments
 
   # Terraform logbook: read/write ONLY this environment's state and lock file
@@ -116,9 +118,15 @@ data "aws_iam_policy_document" "pipeline" {
   }
 
   statement {
-    sid       = "FindZonesAndChanges"
-    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName", "route53:GetChange"]
+    sid       = "FindZones"
+    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName"]
     resources = ["*"]
+  }
+
+  statement {
+    sid       = "CheckDnsChanges"
+    actions   = ["route53:GetChange"]
+    resources = ["arn:aws:route53:::change/*"]
   }
 
   # DNS: change ONLY this environment's names and their certificate-proof records (_xyz.name)

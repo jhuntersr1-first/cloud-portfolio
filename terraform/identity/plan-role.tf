@@ -31,6 +31,7 @@ resource "aws_iam_role" "plan" {
 }
 
 data "aws_iam_policy_document" "plan" {
+  #checkov:skip=CKV_AWS_356:Read-only plan role; "*" only on list/get actions that offer no resource ARN (cloudfront List*, acm:ListCertificates, route53:ListHostedZones*)
   statement {
     sid       = "ListStateBucket"
     actions   = ["s3:ListBucket"]
@@ -78,8 +79,14 @@ data "aws_iam_policy_document" "plan" {
 
   statement {
     sid       = "FindZones"
-    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName", "route53:GetChange"]
+    actions   = ["route53:ListHostedZones", "route53:ListHostedZonesByName"]
     resources = ["*"]
+  }
+
+  statement {
+    sid       = "CheckDnsChanges"
+    actions   = ["route53:GetChange"]
+    resources = ["arn:aws:route53:::change/*"]
   }
 }
 
