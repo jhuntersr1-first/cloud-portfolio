@@ -27,3 +27,9 @@ variable "domain_names" {
     error_message = "Every domain name must be the zone itself or a subdomain of it."
   }
 }
+
+variable "enable_three_tier" {
+  description = "Build the app and data tiers (VPC, ALB, EC2, RDS) for the visitor counter. Off by default to control cost."
+  type        = bool
+  default     = false
+}
