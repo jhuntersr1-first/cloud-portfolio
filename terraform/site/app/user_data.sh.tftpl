@@ -1,0 +1,43 @@
+#!/bin/bash
+# First-boot setup for the visitor counter (rendered by Terraform).
+set -euo pipefail
+
+# 1. Postgres driver (AL2023 repos are reached through the S3 gateway endpoint)
+dnf install -y python3-psycopg2
+
+# 2. Service account: no shell, no home, can't log in
+id counter >/dev/null 2>&1 || useradd --system --no-create-home --shell /sbin/nologin counter
+
+# 3. App code: owned by root, so the service can run it but not change it
+mkdir -p /opt/counter
+echo "${app_b64}" | base64 -d > /opt/counter/counter.py
+chown -R root:root /opt/counter
+chmod 0755 /opt/counter/counter.py
+
+# 4. systemd service with sandboxing
+cat > /etc/systemd/system/counter.service << 'UNIT'
+[Unit]
+Description=Portfolio visitor counter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=counter
+Environment=APP_ENV=${environment}
+Environment=APP_PORT=${app_port}
+Environment=AWS_REGION=${region}
+Environment=HOME=/tmp
+ExecStart=/usr/bin/python3 /opt/counter/counter.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now counter.service
