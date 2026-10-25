@@ -104,7 +104,11 @@
       <p>GitHub: <a href="https://github.com/jhuntersr1-first/cloud-portfolio">github.com/jhuntersr1-first/cloud-portfolio</a></p>
     </section>
 
-    <footer>Deployed automatically via GitHub Actions to AWS S3 + CloudFront.</footer>
+    <footer>
+      Deployed automatically via GitHub Actions to AWS S3 + CloudFront.
+      <p id="visit-counter" hidden>Visitor #<span id="visit-count"></span>, served live by the interview-mode 3-tier stack (ALB &rarr; EC2 &rarr; RDS).</p>
+    </footer>
   </div>
+    <script src="counter.js" defer></script>
 </body>
 </html>
