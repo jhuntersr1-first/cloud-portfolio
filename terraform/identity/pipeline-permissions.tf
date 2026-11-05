@@ -37,6 +37,56 @@ data "aws_iam_policy_document" "pipeline" {
     ]
   }
 
+  # Log bucket: may BUILD and CONFIGURE its own environment's log bucket,
+  # but gets no object permissions, so it can't read or delete the footage.
+  statement {
+    sid = "ManageOwnLogBucket"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket*",
+      "s3:Get*",
+      "s3:List*",
+      "s3:PutBucket*",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutLifecycleConfiguration",
+    ]
+    resources = ["arn:aws:s3:::cloud-portfolio-${each.key}-logs-*"]
+  }
+
+  # CloudFront log delivery (v2): works without S3 ACLs.
+  # Deliveries must live in us-east-1 for CloudFront.
+  statement {
+    sid       = "AllowCloudFrontLogDelivery"
+    actions   = ["cloudfront:AllowVendedLogsDeliveryForResource"]
+    resources = ["arn:aws:cloudfront::*:distribution/*"]
+  }
+
+  statement {
+    sid = "ManageLogDeliveries"
+    actions = [
+      "logs:PutDeliverySource",
+      "logs:PutDeliveryDestination",
+      "logs:CreateDelivery",
+      "logs:UpdateDeliveryConfiguration",
+      "logs:GetDelivery*",
+      "logs:DeleteDelivery*",
+      "logs:TagResource",
+      "logs:UntagResource",
+      "logs:ListTagsForResource",
+    ]
+    resources = [
+      "arn:aws:logs:us-east-1:*:delivery-source:cloud-portfolio-${each.key}-*",
+      "arn:aws:logs:us-east-1:*:delivery-destination:cloud-portfolio-${each.key}-*",
+      "arn:aws:logs:us-east-1:*:delivery:*",
+    ]
+  }
+
+  statement {
+    sid       = "DescribeLogDeliveries"
+    actions   = ["logs:DescribeDelivery*", "logs:DescribeDeliveries"]
+    resources = ["*"]
+  }
+
   # CloudFront: has limited resource-level permission support, so these use "*".
   # Compensating controls: no IAM, explicit denies below, prod gated by approval.
   statement {
