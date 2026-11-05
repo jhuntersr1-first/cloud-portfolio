@@ -67,3 +67,21 @@ resource "aws_route53_record" "site_ipv6" {
     evaluate_target_health = false
   }
 }
+
+# CAA: only Amazon may issue HTTPS certificates for this domain and its subdomains.
+# Lives on the apex domain, so only prod creates it; dev/test would collide over one record.
+resource "aws_route53_record" "caa" {
+  count = var.environment == "prod" ? 1 : 0
+
+  zone_id = data.aws_route53_zone.site.zone_id
+  name    = var.zone_name
+  type    = "CAA"
+  ttl     = 3600
+
+  records = [
+    "0 issue \"amazon.com\"",
+    "0 issue \"amazontrust.com\"",
+    "0 issue \"awstrust.com\"",
+    "0 issue \"amazonaws.com\"",
+  ]
+}
