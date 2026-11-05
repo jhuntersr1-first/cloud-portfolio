@@ -52,6 +52,30 @@ data "aws_iam_policy_document" "plan" {
     ]
   }
 
+  # Log bucket: read its SETTINGS only (no /* = no reading the footage)
+  statement {
+    sid       = "ReadLogBucketSettings"
+    actions   = ["s3:Get*", "s3:List*"]
+    resources = ["arn:aws:s3:::cloud-portfolio-*-logs-*"]
+  }
+
+  # CloudFront log delivery: read the camera, recorder, and cable
+  statement {
+    sid     = "ReadLogDeliveries"
+    actions = ["logs:GetDelivery*", "logs:ListTagsForResource"]
+    resources = [
+      "arn:aws:logs:us-east-1:*:delivery-source:cloud-portfolio-*",
+      "arn:aws:logs:us-east-1:*:delivery-destination:cloud-portfolio-*",
+      "arn:aws:logs:us-east-1:*:delivery:*",
+    ]
+  }
+
+  statement {
+    sid       = "DescribeLogDeliveries"
+    actions   = ["logs:DescribeDelivery*", "logs:DescribeDeliveries"]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "ReadCloudFront"
     actions   = ["cloudfront:Get*", "cloudfront:List*", "cloudfront:DescribeFunction"]

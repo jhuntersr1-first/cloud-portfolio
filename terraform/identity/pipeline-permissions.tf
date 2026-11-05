@@ -57,7 +57,7 @@ data "aws_iam_policy_document" "pipeline" {
   # Deliveries must live in us-east-1 for CloudFront.
   statement {
     sid       = "AllowCloudFrontLogDelivery"
-    actions   = ["cloudfront:AllowVendedLogsDeliveryForResource"]
+    actions   = ["cloudfront:AllowVendedLogDeliveryForResource"]
     resources = ["arn:aws:cloudfront::*:distribution/*"]
   }
 
